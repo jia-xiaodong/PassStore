@@ -450,7 +450,7 @@ class MainApp(tk.Tk):
         # 1. update database
         self._db.update(target)
         # 2. update UI
-        self._tv.item(selected, values=(target.sn, target.loc, target.usr, '*' * len(target.pwd)), tags=target.pwd)
+        self._tv.item(selected, values=(target.sn, target.loc, target.usr, self.pwd_mask(target.pwd)), tags=target.pwd)
 
     def menu_delete_pass(self):
         """
@@ -468,7 +468,7 @@ class MainApp(tk.Tk):
         record_id = int(values[Column.SN])
         self._db.delete(record_id)
         # 2. update model
-        index = next(i for i, j in enumerate(self._records) if j.sn == record_id)
+        index = self.find_record_index(sn=record_id)
         self._records.pop(index)
         # 3. update UI
         self._tv.delete(selected)
@@ -503,7 +503,7 @@ It's safer to store them to Web browser.
     def refresh_treeview(self, hits):
         self._tv.delete(*self._tv.get_children(''))
         for h in hits:
-            self._tv.insert('', tk.END, None, values=(h.sn, h.loc, h.usr, '*' * len(h.pwd)), tags=h.pwd)
+            self._tv.insert('', tk.END, None, values=(h.sn, h.loc, h.usr, self.pwd_mask(h.pwd)), tags=h.pwd)
 
     def on_treeview_click(self, evt):
         if self._tv.identify_region(evt.x, evt.y) != 'cell':
@@ -543,6 +543,14 @@ It's safer to store them to Web browser.
             sn = kw.pop('sn')
             index = next(i for i, j in enumerate(self._records) if j.sn == sn)
         return index
+
+    @staticmethod
+    def pwd_mask(pwd: str) -> str:
+        length = len(pwd)
+        if length < 6:
+            return '*' * length
+        else:
+            return '%s%s%s' % (pwd[0], '*' * (length - 2), pwd[-1])
 
 
 if __name__ == '__main__':
