@@ -54,6 +54,7 @@ class Column(enum.IntEnum):
     LOC = 1  # location
     USR = 2  # username
     PWD = 3  # password
+    USR_NUM = 3  # TreeView内置的列名：#1,#2,#3,#4
     PWD_NUM = 4  # TreeView内置的列名：#1,#2,#3,#4
 
 
@@ -293,7 +294,7 @@ class MainApp(tk.Tk):
         for i, col in enumerate(columns):
             tv.column(f'#{i + 1}', width=widths[i] * unit_width, anchor=tk.W)
             tv.heading(f'#{i + 1}', text=col)
-        tv.bind('<1>', self.on_treeview_click)
+        tv.bind('<Double-1>', self.on_treeview_click)
         self._tv = tv
 
     def init_misc(self):
@@ -502,7 +503,9 @@ It's safer to store them to Web browser.
 
     def refresh_treeview(self, hits):
         self._tv.delete(*self._tv.get_children(''))
-        for h in hits:
+        for i, h in enumerate(hits):
+            if i >= MainApp.TREEVIEW_MAX:
+                break
             self._tv.insert('', tk.END, None, values=(h.sn, h.loc, h.usr, self.pwd_mask(h.pwd)), tags=h.pwd)
 
     def on_treeview_click(self, evt):
@@ -516,9 +519,12 @@ It's safer to store them to Web browser.
         if column == f'#{Column.PWD_NUM}':
             pwd = self._tv.item(record_id, 'tags')
             self.clipboard_append(pwd)
-        else:
+        elif column == f'#{Column.USR_NUM}':
             values = self._tv.item(record_id, 'values')
             self.clipboard_append(values[Column.USR])
+        else:
+            values = self._tv.item(record_id, 'values')
+            self.clipboard_append(values[Column.LOC])
 
     def find_record(self, **kw) -> KeychainRecord:
         """

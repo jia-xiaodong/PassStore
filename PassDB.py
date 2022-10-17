@@ -9,10 +9,10 @@ class KeychainColumn(Enum):
     """
     Keychain数据表的各列组成
     """
-    id = 0
-    loc = 1
-    usr = 2
-    pwd = 3
+    id = 0   # id, sn, ...
+    loc = 1  # location
+    usr = 2  # username
+    pwd = 3  # password
     COUNT = 4
 
 
