@@ -490,7 +490,7 @@ It's safer to store them to Web browser.
 
     def hide_to_systray(self):
         icon = Image.new(mode='RGB', size=(32, 32), color='black')
-        menu = pystray.MenuItem('Show', self.restore_from_systray)
+        menu = pystray.MenuItem('default', self.restore_from_systray, enabled=True, default=True, visible=False)
         self._icon = pystray.Icon(name='PassStore', title='PassStore', menu=(menu,), icon=icon)
         self.withdraw()
         self._icon.run()
