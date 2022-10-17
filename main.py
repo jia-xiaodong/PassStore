@@ -301,9 +301,13 @@ class MainApp(tk.Tk):
         self.title(MainApp.TITLE)
         self.protocol('WM_DELETE_WINDOW', self.hide_to_systray)
         self.event_generate(MainApp.EVENT_DB_EXIST, state=0)
+        self.bind('<Escape>', lambda e: self.hide_to_systray())
+        # database
         self._db = None       # PassDatabase
         self._records = []  # 数据库所有记录一次性读取出来
-        self._hits = []   # 搜索的结果，缓存到这里
+        # for system tray
+        self._icon = Image.new(mode='RGB', size=(32, 32), color='black')
+        self._systray_menu = pystray.MenuItem('default', self.restore_from_systray, enabled=True, default=True, visible=False)
 
     def init_listeners(self):
         self._relied = {}
@@ -485,15 +489,13 @@ It's safer to store them to Web browser.
         messagebox.showinfo(MainApp.TITLE, msg)
 
     def restore_from_systray(self, item=None):
-        self._icon.stop()
+        self._systray.stop()
         self.after(0, self.deiconify)
 
     def hide_to_systray(self):
-        icon = Image.new(mode='RGB', size=(32, 32), color='black')
-        menu = pystray.MenuItem('default', self.restore_from_systray, enabled=True, default=True, visible=False)
-        self._icon = pystray.Icon(name='PassStore', title='PassStore', menu=(menu,), icon=icon)
+        self._systray = pystray.Icon(name='PassStore', title='PassStore', menu=(self._systray_menu,), icon=self._icon)
         self.withdraw()
-        self._icon.run()
+        self._systray.run()
 
     def on_global_hotkey(self):
         if self.winfo_ismapped():
