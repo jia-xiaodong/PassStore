@@ -14,7 +14,7 @@ from tkinter import messagebox
 from tkinter import filedialog
 
 # 3rd party modules
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import pystray
 
 # custom defined modules
@@ -226,6 +226,7 @@ class MainApp(tk.Tk):
         self.init_listeners()
         self.init_menu()
         self.init_querying_area()
+        self.init_systray_resource()
         self.init_misc()
 
     def init_menu(self):
@@ -305,8 +306,11 @@ class MainApp(tk.Tk):
         # database
         self._db = None       # PassDatabase
         self._records = []  # 数据库所有记录一次性读取出来
-        # for system tray
+
+    def init_systray_resource(self):
         self._icon = Image.new(mode='RGB', size=(32, 32), color='black')
+        painter = ImageDraw.Draw(self._icon)
+        painter.text((5, 5), 'PS', font=ImageFont.truetype('arial.ttf', size=18))
         self._systray_menu = pystray.MenuItem('default', self.restore_from_systray, enabled=True, default=True, visible=False)
 
     def init_listeners(self):
@@ -481,7 +485,7 @@ class MainApp(tk.Tk):
     def menu_help_about(self):
         msg = '''
 Store all credentials together to a local file.
-It's safer to store them to Web browser.
+It's safer than storing them to Web browser.
 
   -- Oct. 13, 2022
   -- Jia Xiao Dong
