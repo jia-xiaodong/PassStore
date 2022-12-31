@@ -416,6 +416,11 @@ class MainApp(tk.Tk):
             tv.heading(f'#{i + 1}', text=col)
         tv.bind('<Double-1>', self.on_treeview_click)
         self._tv = tv
+        # add a resize-control
+        sub = tk.Frame(self)
+        sub.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.NO)
+        w = ttk.Sizegrip(sub)
+        w.pack(side=tk.RIGHT, fill=tk.BOTH, expand=tk.NO)
 
     def init_misc(self):
         self.title(MainApp.TITLE)
@@ -725,6 +730,8 @@ It's safer than storing them to Web browser.
             self._tv.item(rid, values=(*values[:-1], otp.kind.name))
 
     def update_passcode(self, rid, values, otp_auth, code, remains):
+        if not self._tv.exists(rid):
+            return
         if remains == 0:
             code, remains = otp_auth.totp()
         else:
