@@ -13,18 +13,20 @@ class KeychainColumn(Enum):
     loc = 1  # location
     usr = 2  # username
     pwd = 3  # password
-    COUNT = 4
+    ext = 4  # extra info, currently is OTP (One-Time Password)
+    COUNT = 5
 
 
 class KeychainRecord:
     """
     Keychain数据表的一条记录
     """
-    def __init__(self, location: str, username: str = None, password: str = None, sn: int = 0):
+    def __init__(self, location: str, username: str = None, password: str = None, extra: str = None, sn: int = 0):
         self._sn = sn
         self._loc = location
         self._usr = username
         self._pwd = password
+        self._ext = extra
         self._dirty_flags = set()
 
     @property
@@ -69,6 +71,17 @@ class KeychainRecord:
         self._dirty_flags.add(KeychainColumn.pwd)
 
     @property
+    def ext(self):
+        return self._ext
+
+    @ext.setter
+    def ext(self, value: str):
+        if self._ext == value:
+            return
+        self._ext = value
+        self._dirty_flags.add(KeychainColumn.ext)
+
+    @property
     def unsaved_fields(self):
         return self._dirty_flags
 
@@ -91,20 +104,20 @@ class PassDatabase:
     def select_all(self):
         records = []
         try:
-            sql = 'SELECT id,loc,usr,pwd FROM keychain'
+            sql = 'SELECT id,loc,usr,pwd,ext FROM keychain'
             cur = self._con.cursor()
             cur.execute(sql)
-            for s, l, u, p in cur.fetchall():
-                records.append(KeychainRecord(l, u, p, s))
-        except Exception as e:
-            print(f'Error on reading: {e}')
+            for s, l, u, p, e in cur.fetchall():
+                records.append(KeychainRecord(l, u, p, e, s))
+        except Exception as ex:
+            print(f'Error on reading: {ex}')
         finally:
             return records
 
     def insert(self, record: KeychainRecord):
         try:
-            sql = 'INSERT INTO keychain (loc, usr, pwd) VALUES(?,?,?)'
-            args = (record.loc, record.usr, record.pwd)
+            sql = 'INSERT INTO keychain (loc, usr, pwd, ext) VALUES(?,?,?,?)'
+            args = (record.loc, record.usr, record.pwd, record.ext)
             cur = self._con.cursor()
             cur.execute(sql, args)
             self._con.commit()
@@ -126,6 +139,9 @@ class PassDatabase:
             elif i == KeychainColumn.pwd:
                 args['pwd'] = record.pwd
                 cols.append('pwd=:pwd')
+            elif i == KeychainColumn.ext:
+                args['ext'] = record.ext
+                cols.append('ext=:ext')
         try:
             if len(cols) > 0:
                 sql = 'UPDATE keychain SET %s WHERE id=%d' % (', '.join(cols), record.sn)
@@ -149,7 +165,8 @@ class PassDatabase:
                             id  INTEGER PRIMARY KEY UNIQUE NOT NULL,
                             loc TEXT NOT NULL,
                             usr TEXT NOT NULL,
-                            pwd TEXT)'''
+                            pwd TEXT,
+                            ext TEXT)'''
             con = sqlite3.connect(filename)
             con.executescript(sql)
             con.commit()

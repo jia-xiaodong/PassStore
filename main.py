@@ -5,6 +5,7 @@
 import os
 import enum
 import re
+import json
 
 # GUI modules
 import tkinter as tk
@@ -17,6 +18,7 @@ from tkinter import filedialog
 from PIL import Image, ImageDraw, ImageFont
 import pystray
 
+from otpauth import OtpAuth
 # custom defined modules
 from PassDB import PassDatabase, KeychainRecord
 
@@ -31,6 +33,47 @@ class MenuId(enum.IntEnum):
     PASS_DELETE = 2
 
     PASS_ITEM = 2     # 顶层菜单的索引，从一开始
+
+
+class OTPType(enum.IntEnum):
+    UNKNOWN = -1
+    HOTP = 0
+    TOTP = 1
+
+
+class OneTimePass:
+    def __init__(self, kind: OTPType, name: str, secret: str, issuer: str):
+        self.kind = kind
+        self.name = name
+        self.secret = secret
+        self.issuer = issuer
+
+    @staticmethod
+    def from_json(config: str):
+        try:
+            cfg: dict = json.loads(config)
+            k = OneTimePass.type_from_str(cfg.pop('type'))
+            n = cfg.pop('name')
+            s = cfg.pop('secret')
+            i = cfg.pop('issuer')
+            return OneTimePass(k, n, s, i)
+        except Exception as e:
+            return None
+
+    def to_json(self):
+        cfg = {'type': self.kind.name.lower(),
+               'name': self.name, 'secret': self.secret,
+               'issuer': self.issuer}
+        return json.dumps(cfg)
+
+    @staticmethod
+    def type_from_str(kind: str):
+        if kind.lower() == 'totp':
+            return OTPType.TOTP
+        elif kind.lower() == 'hotp':
+            return OTPType.HOTP
+        else:
+            return OTPType.UNKNOWN
 
 
 class RelyItem:
@@ -54,8 +97,48 @@ class Column(enum.IntEnum):
     LOC = 1  # location
     USR = 2  # username
     PWD = 3  # password
+    EXT = 4  # extra
+    SN_NUM = 1   # TreeView内置的列名：#1,#2,#3,#4
+    LOC_NUM = 2  # TreeView内置的列名：#1,#2,#3,#4
     USR_NUM = 3  # TreeView内置的列名：#1,#2,#3,#4
     PWD_NUM = 4  # TreeView内置的列名：#1,#2,#3,#4
+    EXT_NUM = 5  # 同上
+
+
+class TipEntry(tk.Entry):
+    def __init__(self, master, *args, **kwargs):
+        self._tip = kwargs.pop('tip', '<placeholder>')
+        self._var = kwargs.get('textvariable', None)
+        if self._var is None:
+            self._var = tk.StringVar()
+            self._var.set(self._tip)
+            kwargs['textvariable'] = self._var
+        tk.Entry.__init__(self, master, *args, **kwargs)
+        self.bind('<FocusIn>', self.hide_placeholder_)
+        self.bind('<FocusOut>', self.show_placeholder_)
+
+    @property
+    def text(self):
+        txt = self._var.get().strip()
+        return '' if txt == self._tip else txt
+
+    @text.setter
+    def text(self, value: str):
+        if value is None or len(value) == 0:
+            self._var.set(self._tip)
+        else:
+            self._var.set(value)
+
+    def is_tip(self, text: str):
+        return self._tip == text
+
+    def hide_placeholder_(self, evt):
+        if self._var.get() == self._tip:
+            self.delete(0, tk.END)
+
+    def show_placeholder_(self, evt):
+        if len(self._var.get()) == 0:
+            self.insert(0, self._tip)
 
 
 class ModalDialog(tk.Toplevel):
@@ -173,46 +256,88 @@ class ModalDialog(tk.Toplevel):
         pass
 
 
-class UpdateRecordDlg(ModalDialog):
+class EditRecordDlg(ModalDialog):
     def __init__(self, master, *a, **kw):
         self._target: KeychainRecord = kw.pop('target')
+        title = kw.pop('title', None)
         ModalDialog.__init__(self, master, *a, **kw)
+        if title is not None:
+            self.title(title)
 
     def body(self, master):
-        padding = {'padx': 5, 'pady': 5}
+        padding5 = {'padx': 5, 'pady': 5}
+        padding0 = {'padx': 0, 'pady': 0}
+        frame = tk.LabelFrame(master, text='Basic')
+        frame.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, **padding5)
         # row #1
-        sub = tk.Frame(master)
-        sub.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding)
-        tk.Label(sub, text='Location:', width=10).pack(side=tk.LEFT, **padding)
-        self._var_loc = tk.StringVar(value=self._target.loc)
-        tk.Entry(sub, textvariable=self._var_loc) \
-            .pack(side=tk.LEFT, fill=tk.X, expand=tk.YES, **padding)
+        self._te_loc = TipEntry(frame, tip='<Location>')
+        self._te_loc.pack(side=tk.TOP, fill=tk.X, expand=tk.NO, **padding5)
+        self._te_loc.text = self._target.loc
         # row #2
-        sub = tk.Frame(master)
-        sub.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding)
-        tk.Label(sub, text='Username:', width=10).pack(side=tk.LEFT, **padding)
-        self._var_usr = tk.StringVar(value=self._target.usr)
-        tk.Entry(sub, textvariable=self._var_usr) \
-            .pack(side=tk.LEFT, fill=tk.X, expand=tk.YES, **padding)
-        # row #3
-        sub = tk.Frame(master)
-        sub.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding)
-        tk.Label(sub, text='Password:', width=10).pack(side=tk.LEFT, **padding)
-        self._var_pwd = tk.StringVar(value=self._target.pwd)
-        tk.Entry(sub, textvariable=self._var_pwd) \
-            .pack(side=tk.LEFT, fill=tk.X, expand=tk.YES, **padding)
+        sub = tk.Frame(frame)
+        sub.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding0)
+        self._te_usr = TipEntry(sub, tip='<Username>')
+        self._te_usr.pack(side=tk.LEFT, fill=tk.X, expand=tk.NO, **padding5)
+        self._te_usr.text = self._target.usr
+        self._te_pwd = TipEntry(sub, tip='<Password>')
+        self._te_pwd.pack(side=tk.LEFT, fill=tk.X, expand=tk.NO, **padding5)
+        self._te_pwd.text = self._target.pwd
+        #
+        otp = OneTimePass.from_json(self._target.ext)
+        #
+        frame = tk.LabelFrame(master, text='One-Time Password')
+        frame.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, **padding5)
+        # row 1
+        sub = tk.Frame(frame)
+        sub.pack(side=tk.TOP, fill=tk.X, expand=tk.NO, **padding5)
+        otp_kinds = (OTPType.TOTP.name.lower(), OTPType.HOTP.name.lower())
+        self._otp_kind = tk.StringVar(value=otp_kinds[0])
+        om = tk.OptionMenu(sub, self._otp_kind, *otp_kinds)
+        om.pack(side=tk.LEFT, fill=tk.X, expand=tk.NO, **padding0)
+        self._te_otp_name = TipEntry(sub, tip='<Name>')
+        self._te_otp_name.pack(side=tk.LEFT, fill=tk.X, expand=tk.NO, **padding0)
+        if otp is not None:
+            self._te_otp_name.text = otp.name
+        self._te_otp_issuer = TipEntry(sub, tip='<Issuer>')
+        self._te_otp_issuer.pack(side=tk.LEFT, fill=tk.X, expand=tk.NO, **padding0)
+        if otp is not None:
+            self._te_otp_issuer.text = otp.issuer
+        # row 2
+        self._te_otp_secret = TipEntry(frame, tip='<Secret>')
+        self._te_otp_secret.pack(side=tk.TOP, fill=tk.X, expand=tk.NO, **padding5)
+        if otp is not None:
+            self._te_otp_secret.text = otp.secret
 
     def validate(self):
-        loc = self._var_loc.get().strip()
-        usr = self._var_usr.get().strip()
-        pwd = self._var_pwd.get().strip()
-        return all(len(i) > 0 for i in [loc, usr, pwd])
+        loc = self._te_loc.text
+        usr = self._te_usr.text
+        pwd = self._te_pwd.text
+
+        otp_valid = False
+        if all(len(t) == 0 for t in self.otp_fields):
+            otp_valid = True
+        elif all(len(t) > 0 for t in self.otp_fields):  # only support TOTP
+            otp_valid = self.otp_type == OTPType.TOTP
+        return all(len(i) > 0 for i in [loc, usr, pwd]) and otp_valid
 
     def apply(self):
-        self._target.loc = self._var_loc.get().strip()
-        self._target.usr = self._var_usr.get().strip()
-        self._target.pwd = self._var_pwd.get().strip()
+        self._target.loc = self._te_loc.text
+        self._target.usr = self._te_usr.text
+        self._target.pwd = self._te_pwd.text
+        if all(len(t) > 0 for t in self.otp_fields):
+            otp = OneTimePass(self.otp_type, *self.otp_fields)
+            self._target.ext = otp.to_json()
+        else:
+            self._target.ext = ''  # fixme: empty or None?
         self.result = True
+
+    @property
+    def otp_type(self):
+        return OneTimePass.type_from_str(self._otp_kind.get())
+
+    @property
+    def otp_fields(self):
+        return [self._te_otp_name.text, self._te_otp_secret.text, self._te_otp_issuer.text]
 
 
 class MainApp(tk.Tk):
@@ -257,41 +382,35 @@ class MainApp(tk.Tk):
         self.config(menu=menu_bar)
 
     def init_querying_area(self):
-        padding = {'padx': 5, 'pady': 5}
+        padding5 = {'padx': 5, 'pady': 5}
+        padding0 = {'padx': 0, 'pady': 0}
         # querying methods grouped together
         frame = tk.LabelFrame(self, text='Query')
-        frame.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, **padding)
+        frame.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, **padding5)
         # row #1
-        sub = tk.Frame(frame)
-        sub.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding)
-        tk.Label(sub, text='Location:', width=10).pack(side=tk.LEFT, **padding)
-        cb = self.register(self.on_location_changed)
-        self._var_loc = tk.StringVar()
-        tk.Entry(sub, textvariable=self._var_loc, validate='key', validatecommand=(cb, '%P')) \
-            .pack(side=tk.LEFT, fill=tk.X, expand=tk.YES, **padding)
+        self._te_loc = TipEntry(frame, tip='<Location>')
+        self._te_loc.pack(side=tk.TOP, fill=tk.X, expand=tk.NO, **padding5)
         # row #2
         sub = tk.Frame(frame)
-        sub.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding)
-        tk.Label(sub, text='Username:', width=10).pack(side=tk.LEFT, **padding)
+        sub.pack(side=tk.TOP, fill=tk.X, expand=tk.NO, **padding0)
+        self._te_usr = TipEntry(sub, tip='<Username>')
+        self._te_usr.pack(side=tk.LEFT, fill=tk.X, expand=tk.YES, **padding5)
+        self._te_pwd = TipEntry(sub, tip='<Password>')
+        self._te_pwd.pack(side=tk.LEFT, fill=tk.X, expand=tk.YES, **padding5)
+        # callback
+        cb = self.register(self.on_location_changed)
+        self._te_loc.config(validate='key', validatecommand=(cb, '%P'))
         cb = self.register(self.on_username_changed)
-        self._var_usr = tk.StringVar()
-        tk.Entry(sub, textvariable=self._var_usr, validate='key', validatecommand=(cb, '%P')) \
-            .pack(side=tk.LEFT, fill=tk.X, expand=tk.YES, **padding)
-        # row #3
-        sub = tk.Frame(frame)
-        sub.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding)
-        tk.Label(sub, text='Password:', width=10).pack(side=tk.LEFT, **padding)
+        self._te_usr.config(validate='key', validatecommand=(cb, '%P'))
         cb = self.register(self.on_password_changed)
-        self._var_pwd = tk.StringVar()
-        tk.Entry(sub, textvariable=self._var_pwd, validate='key', validatecommand=(cb, '%P')) \
-            .pack(side=tk.LEFT, fill=tk.X, expand=tk.YES, **padding)
+        self._te_pwd.config(validate='key', validatecommand=(cb, '%P'))
         # result
         ft = font.Font()
         unit_width = max(ft.measure(d) for d in '0123456789')
-        columns = ['id', 'location', 'username', 'password']
-        widths = [4, 40, 30, 15]
+        columns = ['id', 'location', 'username', 'password', 'extra']
+        widths = [4, 40, 30, 15, 15]
         tv = ttk.Treeview(self, show='headings', height=MainApp.TREEVIEW_MAX, columns=columns, selectmode=tk.BROWSE)
-        tv.pack(side=tk.TOP, **padding)
+        tv.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, **padding5)
         for i, col in enumerate(columns):
             tv.column(f'#{i + 1}', width=widths[i] * unit_width, anchor=tk.W)
             tv.heading(f'#{i + 1}', text=col)
@@ -335,15 +454,21 @@ class MainApp(tk.Tk):
             w.set_state(state)
 
     def on_location_changed(self, text: str):
-        self.on_input_changed(text, self._var_usr.get().strip(), self._var_pwd.get().strip())
+        if self._te_loc.is_tip(text):
+            return True
+        self.on_input_changed(text, self._te_usr.text, self._te_pwd.text)
         return True
 
     def on_username_changed(self, text: str):
-        self.on_input_changed(self._var_loc.get().strip(), text, self._var_pwd.get().strip())
+        if self._te_usr.is_tip(text):
+            return True
+        self.on_input_changed(self._te_loc.text, text, self._te_pwd.text)
         return True
 
     def on_password_changed(self, text: str):
-        self.on_input_changed(self._var_loc.get().strip(), self._var_usr.get().strip(), text)
+        if self._te_pwd.is_tip(text):
+            return True
+        self.on_input_changed(self._te_loc.text, self._te_usr.text, text)
         return True
 
     def on_input_changed(self, loc: str, usr: str, pwd: str):
@@ -403,7 +528,7 @@ class MainApp(tk.Tk):
         self._records = self._db.select_all()
         self.refresh_treeview(self._records)
         self.event_generate(MainApp.EVENT_DB_EXIST, state=1)
-        self.title('[%s] %s' % (MainApp.TITLE, os.path.basename(filename)))
+        self.title('[%s] %s (%d entries)' % (MainApp.TITLE, os.path.basename(filename), len(self._records)))
 
     def menu_database_close(self):
         if self._db is None:
@@ -412,6 +537,7 @@ class MainApp(tk.Tk):
         self._records.clear()
         self._tv.delete(*self._tv.get_children(''))
         self.event_generate(MainApp.EVENT_DB_EXIST, state=0)
+        self.title(MainApp.TITLE)
 
     def quit_app(self):
         if not messagebox.askokcancel(MainApp.TITLE, 'Are you sure to QUIT?'):
@@ -423,24 +549,27 @@ class MainApp(tk.Tk):
         """
         插入一条新记录
         """
-        loc = self._var_loc.get().strip()
-        usr = self._var_usr.get().strip()
-        pwd = self._var_pwd.get().strip()
+        loc = self._te_loc.text
+        usr = self._te_usr.text
+        pwd = self._te_pwd.text
         if any(len(i) == 0 for i in [loc, usr, pwd]):
             messagebox.showerror(MainApp.TITLE, 'Three fields must not be empty!')
             return
         if any(i.loc == loc and i.usr == usr for i in self._records):
             messagebox.showerror(MainApp.TITLE, 'This location already has this credential!')
             return
-        # 1. update database
         new_record = KeychainRecord(loc, usr, pwd)
+        dlg = EditRecordDlg(self, title='Insert Record', target=new_record)
+        if dlg.show() is False:
+            return
+        # 1. update database
         self._db.insert(new_record)
         # 2. update model
         self._records.append(new_record)
         # 3. UI is updated automatically by variables' change!
-        self._var_loc.set('')
-        self._var_usr.set('')
-        self._var_pwd.set('')
+        self._te_loc.text = ''
+        self._te_usr.text = ''
+        self._te_pwd.text = ''
 
     def menu_update_pass(self):
         """
@@ -451,15 +580,19 @@ class MainApp(tk.Tk):
             messagebox.showerror(MainApp.TITLE, 'No pass item is selected!')
             return
         selected = record_ids[0] if len(record_ids) == 1 else self._tv.focus()
+        if len(selected) == 0:
+            return
         values = self._tv.item(selected, 'values')
         target: KeychainRecord = self.find_record(sn=int(values[Column.SN]))
-        dlg = UpdateRecordDlg(self, target=target)
+        dlg = EditRecordDlg(self, title='Update Record', target=target)
         if dlg.show() is False:
             return
         # 1. update database
         self._db.update(target)
         # 2. update UI
-        self._tv.item(selected, values=(target.sn, target.loc, target.usr, self.pwd_mask(target.pwd)), tags=target.pwd)
+        otp = OneTimePass.from_json(target.ext)
+        extra = '' if otp is None else otp.kind.name
+        self._tv.item(selected, values=(target.sn, target.loc, target.usr, self.pwd_mask(target.pwd), extra), tags=(target.pwd, target.ext))
 
     def menu_delete_pass(self):
         """
@@ -512,7 +645,9 @@ It's safer than storing them to Web browser.
         for i, h in enumerate(hits):
             if i >= MainApp.TREEVIEW_MAX:
                 break
-            self._tv.insert('', tk.END, None, values=(h.sn, h.loc, h.usr, self.pwd_mask(h.pwd)), tags=h.pwd)
+            otp = OneTimePass.from_json(h.ext)
+            extra = '' if otp is None else otp.kind.name
+            self._tv.insert('', tk.END, None, values=(h.sn, h.loc, h.usr, self.pwd_mask(h.pwd), extra), tags=(h.pwd, h.ext))
 
     def on_treeview_click(self, evt):
         if self._tv.identify_region(evt.x, evt.y) != 'cell':
@@ -523,12 +658,21 @@ It's safer than storing them to Web browser.
         self.clipboard_clear()
         column = self._tv.identify_column(evt.x)
         if column == f'#{Column.PWD_NUM}':
-            pwd = self._tv.item(record_id, 'tags')
+            pwd, _ = self._tv.item(record_id, 'tags')
             self.clipboard_append(pwd)
         elif column == f'#{Column.USR_NUM}':
             values = self._tv.item(record_id, 'values')
             self.clipboard_append(values[Column.USR])
-        else:
+        elif column == f'#{Column.EXT_NUM}':
+            values = self._tv.item(record_id, 'values')
+            _, ext = self._tv.item(record_id, 'tags')
+            if self.is_otp_type(values[Column.EXT]):  # 当前显示的是OTP类型
+                self.show_passcode(record_id, values, ext)
+            elif len(values[Column.EXT]) > 0:         # 当前显示的OTP密码
+                sep = values[Column.EXT].find(':')
+                self.clipboard_append(values[Column.EXT][:sep])
+                self.show_passcode(record_id, values, ext, False)
+        elif column == f'#{Column.LOC_NUM}':
             values = self._tv.item(record_id, 'values')
             self.clipboard_append(values[Column.LOC])
 
@@ -564,6 +708,34 @@ It's safer than storing them to Web browser.
         else:
             return '%s%s%s' % (pwd[0], '*' * (length - 2), pwd[-1])
 
+    @staticmethod
+    def is_otp_type(t: str):
+        return OneTimePass.type_from_str(t) != OTPType.UNKNOWN
+
+    def show_passcode(self, rid, values, ext, show=True):
+        otp = OneTimePass.from_json(ext)
+        if show:
+            auth = OtpAuth(otp.secret)
+            code, remains = auth.totp()
+            values = values[:-1]
+            self._tv.item(rid, values=(*values, f'{code}:{remains}'))
+            self._tv_updater = self.after(1000, lambda: self.update_passcode(rid, values, auth, code, remains))
+        else:
+            self.after_cancel(self._tv_updater)
+            self._tv.item(rid, values=(*values[:-1], otp.kind.name))
+
+    def update_passcode(self, rid, values, otp_auth, code, remains):
+        if remains == 0:
+            code, remains = otp_auth.totp()
+        else:
+            remains -= 1
+        self._tv.item(rid, values=(*values, f'{code}:{remains}'))
+        self._tv_updater = self.after(1000, lambda: self.update_passcode(rid, values, otp_auth, code, remains))
+
 
 if __name__ == '__main__':
-    MainApp().mainloop()
+    try:
+        root = MainApp()
+        root.mainloop()
+    except Exception as e:
+        print(e)
