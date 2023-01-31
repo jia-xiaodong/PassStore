@@ -99,9 +99,9 @@ class Column(enum.IntEnum):
     PWD = 3  # password
     EXT = 4  # extra
     SN_NUM = 1   # TreeView内置的列名：#1,#2,#3,#4
-    LOC_NUM = 2  # TreeView内置的列名：#1,#2,#3,#4
-    USR_NUM = 3  # TreeView内置的列名：#1,#2,#3,#4
-    PWD_NUM = 4  # TreeView内置的列名：#1,#2,#3,#4
+    LOC_NUM = 2  # 同上
+    USR_NUM = 3  # 同上
+    PWD_NUM = 4  # 同上
     EXT_NUM = 5  # 同上
 
 
@@ -386,7 +386,7 @@ class MainApp(tk.Tk):
         padding0 = {'padx': 0, 'pady': 0}
         # querying methods grouped together
         frame = tk.LabelFrame(self, text='Query')
-        frame.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, **padding5)
+        frame.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding5)
         # row #1
         self._te_loc = TipEntry(frame, tip='<Location>')
         self._te_loc.pack(side=tk.TOP, fill=tk.X, expand=tk.NO, **padding5)
@@ -410,7 +410,7 @@ class MainApp(tk.Tk):
         columns = ['id', 'location', 'username', 'password', 'extra']
         widths = [4, 40, 30, 15, 15]
         tv = ttk.Treeview(self, show='headings', height=MainApp.TREEVIEW_MAX, columns=columns, selectmode=tk.BROWSE)
-        tv.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, **padding5)
+        tv.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding5)
         for i, col in enumerate(columns):
             tv.column(f'#{i + 1}', width=widths[i] * unit_width, anchor=tk.W)
             tv.heading(f'#{i + 1}', text=col)
@@ -418,7 +418,7 @@ class MainApp(tk.Tk):
         self._tv = tv
         # add a resize-control
         sub = tk.Frame(self)
-        sub.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.NO)
+        sub.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=tk.NO)
         w = ttk.Sizegrip(sub)
         w.pack(side=tk.RIGHT, fill=tk.BOTH, expand=tk.NO)
 
@@ -709,6 +709,8 @@ It's safer than storing them to Web browser.
     def pwd_mask(pwd: str) -> str:
         length = len(pwd)
         if length < 6:
+            if pwd.upper() == 'LDAP':
+                return pwd
             return '*' * length
         else:
             return '%s%s%s' % (pwd[0], '*' * (length - 2), pwd[-1])
