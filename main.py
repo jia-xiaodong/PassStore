@@ -268,43 +268,43 @@ class EditRecordDlg(ModalDialog):
         padding5 = {'padx': 5, 'pady': 5}
         padding0 = {'padx': 0, 'pady': 0}
         frame = tk.LabelFrame(master, text='Basic')
-        frame.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, **padding5)
+        frame.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding5)
         # row #1
         self._te_loc = TipEntry(frame, tip='<Location>')
-        self._te_loc.pack(side=tk.TOP, fill=tk.X, expand=tk.NO, **padding5)
+        self._te_loc.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding5)
         self._te_loc.text = self._target.loc
         # row #2
         sub = tk.Frame(frame)
         sub.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding0)
         self._te_usr = TipEntry(sub, tip='<Username>')
-        self._te_usr.pack(side=tk.LEFT, fill=tk.X, expand=tk.NO, **padding5)
+        self._te_usr.pack(side=tk.LEFT, fill=tk.X, expand=tk.YES, **padding5)
         self._te_usr.text = self._target.usr
         self._te_pwd = TipEntry(sub, tip='<Password>')
-        self._te_pwd.pack(side=tk.LEFT, fill=tk.X, expand=tk.NO, **padding5)
+        self._te_pwd.pack(side=tk.RIGHT, fill=tk.X, expand=tk.YES, **padding5)
         self._te_pwd.text = self._target.pwd
         #
         otp = OneTimePass.from_json(self._target.ext)
         #
         frame = tk.LabelFrame(master, text='One-Time Password')
-        frame.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, **padding5)
+        frame.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding5)
         # row 1
         sub = tk.Frame(frame)
-        sub.pack(side=tk.TOP, fill=tk.X, expand=tk.NO, **padding5)
+        sub.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding5)
         otp_kinds = (OTPType.TOTP.name.lower(), OTPType.HOTP.name.lower())
         self._otp_kind = tk.StringVar(value=otp_kinds[0])
         om = tk.OptionMenu(sub, self._otp_kind, *otp_kinds)
         om.pack(side=tk.LEFT, fill=tk.X, expand=tk.NO, **padding0)
         self._te_otp_name = TipEntry(sub, tip='<Name>')
-        self._te_otp_name.pack(side=tk.LEFT, fill=tk.X, expand=tk.NO, **padding0)
+        self._te_otp_name.pack(side=tk.LEFT, fill=tk.X, expand=tk.YES, **padding0)
         if otp is not None:
             self._te_otp_name.text = otp.name
         self._te_otp_issuer = TipEntry(sub, tip='<Issuer>')
-        self._te_otp_issuer.pack(side=tk.LEFT, fill=tk.X, expand=tk.NO, **padding0)
+        self._te_otp_issuer.pack(side=tk.RIGHT, fill=tk.X, expand=tk.YES, **padding0)
         if otp is not None:
             self._te_otp_issuer.text = otp.issuer
         # row 2
         self._te_otp_secret = TipEntry(frame, tip='<Secret>')
-        self._te_otp_secret.pack(side=tk.TOP, fill=tk.X, expand=tk.NO, **padding5)
+        self._te_otp_secret.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding5)
         if otp is not None:
             self._te_otp_secret.text = otp.secret
 
