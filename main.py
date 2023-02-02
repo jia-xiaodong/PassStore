@@ -480,7 +480,8 @@ class MainApp(tk.Tk):
         hits = list(self._records)
         # 1. location
         if len(loc) != 0:
-            pattern = '.*'.join(list(loc))
+            loc = [re.escape(each) for each in loc]
+            pattern = '.*'.join(loc)
             regex = re.compile(pattern, re.IGNORECASE)
             hits[:] = [i for i in hits if regex.search(i.loc) is not None]
             if len(hits) == 0:
@@ -488,7 +489,8 @@ class MainApp(tk.Tk):
                 return
         # 2. username
         if len(usr) != 0:
-            pattern = '.*'.join(list(usr))
+            usr = [re.escape(each) for each in usr]
+            pattern = '.*'.join(usr)
             regex = re.compile(pattern, re.IGNORECASE)
             hits[:] = [i for i in hits if regex.search(i.usr) is not None]
             if len(hits) == 0:
@@ -496,7 +498,8 @@ class MainApp(tk.Tk):
                 return
         # 3. password
         if len(pwd) != 0:
-            pattern = '.*'.join(list(pwd))
+            pwd = [re.escape(each) for each in pwd]
+            pattern = '.*'.join(pwd)
             regex = re.compile(pattern, re.IGNORECASE)
             hits[:] = [i for i in hits if regex.search(i.pwd) is not None]
         #
