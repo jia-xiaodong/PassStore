@@ -343,7 +343,10 @@ class EditRecordDlg(ModalDialog):
 class MainApp(tk.Tk):
     TITLE = 'PassStore'
     EVENT_DB_EXIST = '<<DBExist>>'  # sent when database is opened / closed.
+    TREEVIEW_MIN = 5
     TREEVIEW_MAX = 5
+    ROW_HEIGHT = 0
+    PADDING = 0
 
     def __init__(self, *a, **kw):
         tk.Tk.__init__(self, *a, **kw)
@@ -386,7 +389,7 @@ class MainApp(tk.Tk):
         padding0 = {'padx': 0, 'pady': 0}
         # querying methods grouped together
         frame = tk.LabelFrame(self, text='Query')
-        frame.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding5)
+        frame.pack(side=tk.TOP, fill=tk.X, expand=tk.NO, **padding5)
         # row #1
         self._te_loc = TipEntry(frame, tip='<Location>')
         self._te_loc.pack(side=tk.TOP, fill=tk.X, expand=tk.NO, **padding5)
@@ -409,8 +412,8 @@ class MainApp(tk.Tk):
         unit_width = max(ft.measure(d) for d in '0123456789')
         columns = ['id', 'location', 'username', 'password', 'extra']
         widths = [4, 40, 30, 15, 15]
-        tv = ttk.Treeview(self, show='headings', height=MainApp.TREEVIEW_MAX, columns=columns, selectmode=tk.BROWSE)
-        tv.pack(side=tk.TOP, fill=tk.X, expand=tk.YES, **padding5)
+        tv = ttk.Treeview(self, show='headings', height=MainApp.TREEVIEW_MIN, columns=columns, selectmode=tk.BROWSE)
+        tv.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, **padding5)
         for i, col in enumerate(columns):
             tv.column(f'#{i + 1}', width=widths[i] * unit_width, anchor=tk.W)
             tv.heading(f'#{i + 1}', text=col)
@@ -421,6 +424,11 @@ class MainApp(tk.Tk):
         sub.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=tk.NO)
         w = ttk.Sizegrip(sub)
         w.pack(side=tk.RIGHT, fill=tk.BOTH, expand=tk.NO)
+        # 待UI（Treeview）绘制完成时再启动计算
+        self.after(1000, self.schedule_calculator)
+
+    def schedule_calculator(self):
+        self.bind('<Configure>', self.on_resize)
 
     def init_misc(self):
         self.title(MainApp.TITLE)
@@ -430,6 +438,8 @@ class MainApp(tk.Tk):
         # database
         self._db = None       # PassDatabase
         self._records = []  # 数据库所有记录一次性读取出来
+        #
+        self._refresher = None
 
     def init_systray_resource(self):
         self._icon = Image.new(mode='RGB', size=(32, 32), color='black')
@@ -504,6 +514,31 @@ class MainApp(tk.Tk):
             hits[:] = [i for i in hits if regex.search(i.pwd) is not None]
         #
         self.refresh_treeview(hits)
+
+    def on_resize(self, event):
+        if MainApp.ROW_HEIGHT == 0:
+            children = self._tv.get_children('')
+            if not children:
+                temp_id = self._tv.insert('', tk.END, values=('', '', '', '', ''))
+                self._tv.update_idletasks()
+                bbox = self._tv.bbox(temp_id)
+                self._tv.delete(temp_id)
+            else:
+                bbox = self._tv.bbox(children[0])
+            if bbox is not None:
+                MainApp.PADDING, MainApp.ROW_HEIGHT = bbox[1], bbox[3]
+        if MainApp.ROW_HEIGHT > 0:
+            new_height = max((self._tv.winfo_height() - MainApp.PADDING) // MainApp.ROW_HEIGHT, MainApp.TREEVIEW_MIN)
+            if new_height != MainApp.TREEVIEW_MAX:
+                MainApp.TREEVIEW_MAX = new_height
+                self._tv.config(height=MainApp.TREEVIEW_MAX)
+                if self._refresher is not None:
+                    self.after_cancel(self._refresher)
+                self._refresher = self.after(1000, self.schedule_refresh)
+
+    def schedule_refresh(self):
+        self.on_input_changed(self._te_loc.text, self._te_usr.text, self._te_pwd.text)
+        self._refresher = None
 
     def menu_database_new(self):
         filename = filedialog.asksaveasfilename(defaultextension='.sqlite3')
